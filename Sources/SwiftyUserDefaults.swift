@@ -1,7 +1,7 @@
 //
 // SwiftyUserDefaults
 //
-// Copyright (c) 2015 Radosław Pietruszewski
+// Copyright (c) 2015-2016 Radosław Pietruszewski
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -127,7 +127,10 @@ public extension NSUserDefaults {
     
     public subscript(key: String) -> Any? {
         get {
-            return self[key]
+            // return untyped Proxy
+            // (make sure we don't fall into infinite loop)
+            let proxy: Proxy = self[key]
+            return proxy
         }
         set {
             switch newValue {
@@ -153,9 +156,26 @@ public extension NSUserDefaults {
     public func remove(key: String) {
         removeObjectForKey(key)
     }
+    
+    /// Removes all keys and values from user defaults
+    /// Use with caution!
+    /// - Note: This method only removes keys on the receiver `NSUserDefaults` object.
+    ///         System-defined keys will still be present afterwards.
+    
+    public func removeAll() {
+        for (key, _) in dictionaryRepresentation() {
+            removeObjectForKey(key)
+        }
+    }
 }
 
-/// Global shortcut for NSUserDefaults.standardUserDefaults()
+/// Global shortcut for `NSUserDefaults.standardUserDefaults()`
+///
+/// **Pro-Tip:** If you want to use shared user defaults, just
+///  redefine this global shortcut in your app target, like so:
+///  ~~~
+///  var Defaults = NSUserDefaults(suiteName: "com.my.app")!
+///  ~~~
 
 public let Defaults = NSUserDefaults.standardUserDefaults()
 
@@ -168,7 +188,7 @@ public class DefaultsKeys {
     private init() {}
 }
 
-/// Base class for static user defaults keys. Specialize with value type type
+/// Base class for static user defaults keys. Specialize with value type
 /// and pass key name to the initializer to create a key.
 
 private protocol OptionalType {}
@@ -215,7 +235,7 @@ extension NSUserDefaults {
     }
 }
 
-// MARK: Static subscripts for standard types
+// MARK: Subscripts for specific standard types
 
 // TODO: Use generic subscripts when they become available
 
@@ -431,7 +451,34 @@ extension NSUserDefaults {
     }
 }
 
-// MARK: Archiving complex types
+// MARK: - Archiving custom types
+
+// MARK: RawRepresentable
+
+extension NSUserDefaults {
+    // TODO: Ensure that T.RawValue is compatible
+    public func archive<T: RawRepresentable>(key: DefaultsKey<T>, _ value: T) {
+        set(key, value.rawValue)
+    }
+    
+    public func archive<T: RawRepresentable>(key: DefaultsKey<T?>, _ value: T?) {
+        if let value = value {
+            set(key, value.rawValue)
+        } else {
+            remove(key)
+        }
+    }
+    
+    public func unarchive<T: RawRepresentable>(key: DefaultsKey<T?>) -> T? {
+        return objectForKey(key._key).flatMap { T(rawValue: $0 as! T.RawValue) }
+    }
+    
+    public func unarchive<T: RawRepresentable>(key: DefaultsKey<T>) -> T? {
+        return objectForKey(key._key).flatMap { T(rawValue: $0 as! T.RawValue) }
+    }
+}
+
+// MARK: NSCoding
 
 extension NSUserDefaults {
     // TODO: Can we simplify this and ensure that T is NSCoding compliant?
@@ -440,7 +487,7 @@ extension NSUserDefaults {
         if let value: AnyObject = value as? AnyObject {
             set(key, NSKeyedArchiver.archivedDataWithRootObject(value))
         } else {
-            assertionFailure("Invalid value type")
+            assertionFailure("Invalid value type, needs to be a NSCoding-compliant type")
         }
     }
     
@@ -450,7 +497,7 @@ extension NSUserDefaults {
         } else if value == nil {
             remove(key)
         } else {
-            assertionFailure("Invalid value type")
+            assertionFailure("Invalid value type, needs to be a NSCoding-compliant type")
         }
     }
     
