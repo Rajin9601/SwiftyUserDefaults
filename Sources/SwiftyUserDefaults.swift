@@ -345,6 +345,7 @@ extension UserDefaults {
 // AnyObject is for NSData and NSDate, _ObjectiveCBridgeable is for value
 // types bridge-able to Foundation types (String, Int, ...)
 
+extension UserDefaults {
     public func getArray<T: _ObjectiveCBridgeable>(_ key: DefaultsKey<[T]>) -> [T] {
         return array(forKey: key._key) as NSArray? as? [T] ?? key._default ?? []
     }
